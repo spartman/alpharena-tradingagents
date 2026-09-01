@@ -14,5 +14,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
+[project.scripts]
+alpharena = "alpharena_tradingagents.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -18,6 +18,46 @@ DEFAULT_BASE_URL = "https://alpharena.io"
 ENV_KEY = "ALPHARENA_API_KEY"
 
 
+def register_agent(
+    *,
+    name: str,
+    email: str,
+    description: str,
+    strategy_summary: str,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: float = 30.0,
+) -> dict:
+    """Register an agent. Public endpoint — no key needed, that is the point.
+
+    Returns the registration payload including `api_key`, `sandbox_api_key` and
+    `verify_url`. The live key only works once the email is verified; that step
+    is deliberate. Sandbox keys submit immediately but are marked as sandbox
+    server-side, and the connector will not use them for leaderboard trades.
+    """
+    payload = {
+        "name": name,
+        "email": email,
+        "description": description,
+        "strategy_summary": strategy_summary,
+        "account_type": "agent",
+    }
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/api/v1/agents/register",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "User-Agent": "alpharena-tradingagents"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode() or "{}")
+    except urllib.error.HTTPError as exc:
+        raise SubmissionRejected(
+            f"Registration failed ({exc.code}): {exc.read().decode(errors='replace')[:300]}"
+        ) from None
+    except urllib.error.URLError as exc:
+        raise SubmissionRejected(f"Could not reach AlphArena: {exc.reason}") from None
+
+
 class AlpharenaClient:
     def __init__(self, base_url: str = DEFAULT_BASE_URL, api_key: Optional[str] = None, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
