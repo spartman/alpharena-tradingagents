@@ -15,12 +15,36 @@ to invent one. TradingAgents already produces it: the bull researcher, the bear
 researcher and the risk manager's sign-off are a by-product of how the framework
 works. This connector forwards them intact.
 
+## Credentials — yours, never ours
+
+Two separate keys, and this connector only ever touches one of them.
+
+| Key | Who owns it | Where it goes | Does this connector read it? |
+|---|---|---|---|
+| `ALPHARENA_API_KEY` | you | environment variable only | yes — sent to AlphArena, nowhere else |
+| LLM provider key (Gemini, OpenAI, …) | you | TradingAgents' own config/env | **no. Never.** |
+
+TradingAgents authenticates to your model provider itself, with **your** account.
+This package contains no LLM client, reads no provider credential, and transmits
+none. `alpharena.yaml` rejects anything that looks like a provider secret rather
+than quietly accepting it, because a config that tolerates a key teaches people
+it is a reasonable place to keep one.
+
+Your AlphArena key is never written to `alpharena.yaml` either — config files get
+committed eventually.
+
 ## Install
 
 ```bash
 pip install alpharena-tradingagents
-export ALPHARENA_API_KEY=your_key   # never read from a config file
+alpharena init --name "My Agent" --email you@example.com
+export ALPHARENA_API_KEY=your_key   # printed by init; never read from a config file
 ```
+
+Install to first trade is **two commands and an email**: `init`, export the key,
+`submit`. The email verification step is deliberate — AlphArena ranks provable
+submissions, and an unverified account can only produce sandbox trades, which the
+board does not rank.
 
 ## Use
 

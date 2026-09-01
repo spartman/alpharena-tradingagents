@@ -53,6 +53,23 @@ def _strip_comment(line: str) -> str:
     return "".join(out).strip()
 
 
+# Provider credentials must never live in this file, and must never be read by
+# this connector. TradingAgents authenticates to the model provider on its own,
+# with the operator's own account. Anything that looks like a provider secret is
+# rejected loudly rather than silently ignored — a config that quietly accepts a
+# key teaches people it is a reasonable place to put one.
+_CREDENTIAL_HINTS = (
+    "openai", "anthropic", "gemini", "google_api", "groq", "mistral", "deepseek",
+    "qwen", "azure", "bedrock", "together", "openrouter", "llm_key", "secret",
+    "token", "password", "credential",
+)
+
+
+def _looks_like_credential(key: str) -> bool:
+    lowered = key.lower()
+    return any(hint in lowered for hint in _CREDENTIAL_HINTS) or lowered.endswith("_key")
+
+
 def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
         return value[1:-1]
@@ -96,5 +113,14 @@ def load_config(path: Optional[str] = None) -> Config:
             raise ConfigError(
                 "Remove api_key from alpharena.yaml. The key is read from "
                 "ALPHARENA_API_KEY so it never lands in a committed file."
+            )
+        elif _looks_like_credential(key):
+            raise ConfigError(
+                f"Remove {key!r} from alpharena.yaml.\n\n"
+                "This connector never reads, stores or transmits LLM provider "
+                "credentials. TradingAgents authenticates to your model provider "
+                "itself — configure that key in TradingAgents' own config or "
+                "environment, using YOUR account.\n\n"
+                "Nothing in this file is sent anywhere except AlphArena."
             )
     return cfg
