@@ -28,6 +28,12 @@ class Config:
     size_pct: float = 5.0
     base_url: str = "https://alpharena.io"
     tickers: List[str] = field(default_factory=list)
+    #: Name of the environment variable holding YOUR model-provider key — the
+    #: variable name, never the value. Empty by default and deliberately so:
+    #: running TradingAgents spends somebody's LLM budget, and it must be a
+    #: choice, not whatever happened to be exported in the shell. The connector
+    #: never reads this variable's contents; TradingAgents does.
+    llm_provider_env: str = ""
 
     def allows(self, ticker: str) -> bool:
         """Empty allowlist means every ticker is permitted."""
@@ -104,6 +110,16 @@ def load_config(path: Optional[str] = None) -> Config:
             cfg.starting_capital = float(value)
         elif key == "size_pct":
             cfg.size_pct = float(value)
+        elif key == "llm_provider_env":
+            # A variable NAME is expected here. A value that looks like a secret
+            # means somebody pasted the key itself.
+            if len(value) > 64 or any(c in value for c in "-. /"):
+                raise ConfigError(
+                    "llm_provider_env expects the NAME of an environment variable "
+                    "(for example GEMINI_API_KEY), not the key itself. Never put a "
+                    "provider key in this file."
+                )
+            cfg.llm_provider_env = value
         elif key == "base_url":
             cfg.base_url = value.rstrip("/")
         elif key == "tickers":

@@ -41,6 +41,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
             f"starting_capital: {args.capital}\n"
             f"size_pct: {args.size_pct}\n"
             f"base_url: {args.base_url}\n"
+            "\n"
+            "# Name of the environment variable holding YOUR model-provider key.\n"
+            "# The variable NAME, never the key itself. Required before `submit`\n"
+            "# runs, so a run always spends a budget you chose to spend.\n"
+            "llm_provider_env: \n"
+            "\n"
             "# tickers:            # optional allowlist; omit to permit all\n"
             "#   - NVDA\n"
         )
@@ -63,6 +69,34 @@ def _cmd_submit(args: argparse.Namespace) -> int:
     if not cfg.allows(args.ticker):
         print(f"{args.ticker} is not in the configured ticker allowlist.", file=sys.stderr)
         return 2
+
+    # Running TradingAgents spends the model-provider budget attached to
+    # whatever credential is visible in this shell. That must be a deliberate
+    # choice by the person running it, not an ambient key the connector happens
+    # to inherit — on a shared or operator machine, inheriting is how somebody
+    # else's key gets spent without them agreeing to it.
+    if not cfg.llm_provider_env:
+        print(
+            "No LLM provider credential nominated.\n\n"
+            "TradingAgents calls a model provider and that spends YOUR budget, so\n"
+            "this connector will not start a run against a key it merely found in\n"
+            "the environment.\n\n"
+            "Set your own key, then name the variable in alpharena.yaml:\n\n"
+            "  export GEMINI_API_KEY=your-own-key\n"
+            "  llm_provider_env: GEMINI_API_KEY\n\n"
+            "The connector never reads that variable's value — TradingAgents does.",
+            file=sys.stderr,
+        )
+        return 4
+
+    if not os.environ.get(cfg.llm_provider_env, "").strip():
+        print(
+            f"{cfg.llm_provider_env} is named in alpharena.yaml but is not set in "
+            "this environment.\n"
+            "Export your own provider key before running.",
+            file=sys.stderr,
+        )
+        return 4
 
     run_date = date.today().isoformat()
 

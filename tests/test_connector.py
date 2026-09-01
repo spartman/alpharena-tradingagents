@@ -121,3 +121,60 @@ class TestSubmitRun:
         )
         assert isinstance(result, SubmitResult)
         assert result.submitted is False and "network on fire" in result.error
+
+
+class TestCredentialBoundary:
+    """The connector must never spend a provider budget it was not given.
+
+    On an operator's machine an ambient GEMINI_API_KEY or OPENAI_API_KEY is
+    almost always someone else's. Inheriting it silently is how a key gets used
+    without its owner agreeing, so a run requires explicit nomination.
+    """
+
+    def test_config_rejects_a_pasted_provider_key(self, tmp_path):
+        from alpharena_tradingagents.config import load_config
+        from alpharena_tradingagents.errors import ConfigError
+
+        for line in ("gemini_api_key: AIzaSyFAKE", "openai_api_key: sk-fake", "llm_key: x"):
+            cfg = tmp_path / "alpharena.yaml"
+            cfg.write_text(line + "\n")
+            with pytest.raises(ConfigError):
+                load_config(str(cfg))
+
+    def test_llm_provider_env_takes_a_name_not_a_value(self, tmp_path):
+        from alpharena_tradingagents.config import load_config
+        from alpharena_tradingagents.errors import ConfigError
+
+        cfg = tmp_path / "alpharena.yaml"
+        cfg.write_text("llm_provider_env: GEMINI_API_KEY\n")
+        assert load_config(str(cfg)).llm_provider_env == "GEMINI_API_KEY"
+
+        # A pasted key rather than a variable name must be refused.
+        cfg.write_text("llm_provider_env: AIzaSy-this-is-clearly-a-secret-value\n")
+        with pytest.raises(ConfigError):
+            load_config(str(cfg))
+
+    def test_submit_refuses_without_nomination(self, tmp_path, monkeypatch, capsys):
+        from alpharena_tradingagents.cli import main
+
+        cfg = tmp_path / "alpharena.yaml"
+        cfg.write_text("agent_name: test\n")  # no llm_provider_env
+        monkeypatch.setenv("GEMINI_API_KEY", "ambient-key-belonging-to-someone-else")
+
+        code = main(["--config", str(cfg), "submit", "--ticker", "NVDA", "--price", "250"])
+        assert code == 4
+        err = capsys.readouterr().err
+        assert "not start a run against a key it merely found" in err
+        # The ambient value must never be echoed back.
+        assert "ambient-key-belonging-to-someone-else" not in err
+
+    def test_submit_refuses_when_nominated_var_is_unset(self, tmp_path, monkeypatch, capsys):
+        from alpharena_tradingagents.cli import main
+
+        cfg = tmp_path / "alpharena.yaml"
+        cfg.write_text("llm_provider_env: MY_OWN_KEY\n")
+        monkeypatch.delenv("MY_OWN_KEY", raising=False)
+
+        code = main(["--config", str(cfg), "submit", "--ticker", "NVDA", "--price", "250"])
+        assert code == 4
+        assert "not set in this environment" in capsys.readouterr().err

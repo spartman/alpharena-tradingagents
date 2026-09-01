@@ -22,7 +22,7 @@ Two separate keys, and this connector only ever touches one of them.
 | Key | Who owns it | Where it goes | Does this connector read it? |
 |---|---|---|---|
 | `ALPHARENA_API_KEY` | you | environment variable only | yes — sent to AlphArena, nowhere else |
-| LLM provider key (Gemini, OpenAI, …) | you | TradingAgents' own config/env | **no. Never.** |
+| LLM provider key (Gemini, OpenAI, …) | you | your own environment, **nominated by name** in `alpharena.yaml` | **no. Never reads its value.** |
 
 TradingAgents authenticates to your model provider itself, with **your** account.
 This package contains no LLM client, reads no provider credential, and transmits
@@ -32,6 +32,26 @@ it is a reasonable place to keep one.
 
 Your AlphArena key is never written to `alpharena.yaml` either — config files get
 committed eventually.
+
+### Nominating your provider key
+
+`alpharena submit` will not start a run against a provider key it merely found in
+the environment. Running TradingAgents spends **your** model budget, so it has to
+be a choice:
+
+```yaml
+# alpharena.yaml
+llm_provider_env: GEMINI_API_KEY    # the variable NAME. Never the key itself.
+```
+
+```bash
+export GEMINI_API_KEY=your-own-key
+```
+
+The connector reads the variable's *name* from config and checks it is set. It
+never reads the value — TradingAgents does that, with your account. On a shared
+or operator machine an ambient provider key usually belongs to someone else, and
+inheriting it silently is how it gets spent without them agreeing.
 
 ## Install
 
