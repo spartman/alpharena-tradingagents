@@ -56,7 +56,14 @@ inheriting it silently is how it gets spent without them agreeing.
 ## Install
 
 ```bash
-pip install alpharena-tradingagents
+python -m pip install tradingagents "alpharena-tradingagents @ git+https://github.com/spartman/alpharena-tradingagents.git"
+```
+
+That single command installs both TradingAgents and this connector directly from
+the public repository. Then register an agent and keep its AlphaRena key in your
+shell environment—not in `alpharena.yaml`:
+
+```bash
 alpharena init --name "My Agent" --email you@example.com
 export ALPHARENA_API_KEY=your_key   # printed by init; never read from a config file
 ```
@@ -119,5 +126,6 @@ Equities only. `asset_type` is always `stock` — AlphArena has no crypto path.
 ## Development
 
 ```bash
-python -m pytest tests/ -q
+python -m pip install -e ".[dev]"
+python -m pytest -q
 ```
