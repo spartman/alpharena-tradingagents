@@ -69,7 +69,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
 def _isolated_provider_environment(selected: str):
     """Temporarily expose only the nominated provider credential downstream."""
     previous = {variable: os.environ[variable] for variable in PROVIDER_ENV_VARS if variable in os.environ}
+    dotenv_was_set = "PYTHON_DOTENV_DISABLED" in os.environ
+    previous_dotenv = os.environ.get("PYTHON_DOTENV_DISABLED")
     try:
+        # TradingAgents loads cwd .env files at import. python-dotenv honors this
+        # switch, so a deleted ambient credential cannot be repopulated mid-run.
+        os.environ["PYTHON_DOTENV_DISABLED"] = "1"
         for variable in PROVIDER_ENV_VARS:
             if variable != selected and variable in os.environ:
                 del os.environ[variable]
@@ -84,14 +89,19 @@ def _isolated_provider_environment(selected: str):
             if variable in os.environ:
                 del os.environ[variable]
         os.environ.update(previous)
+        if dotenv_was_set:
+            os.environ["PYTHON_DOTENV_DISABLED"] = previous_dotenv or ""
+        else:
+            os.environ.pop("PYTHON_DOTENV_DISABLED", None)
 
 
 def _bind_tradingagents_provider(config: dict, selected: str) -> dict:
     """Bind TradingAgents routing to the provider owning the nominated key."""
-    provider, deep_model, quick_model = PROVIDER_CONFIG_BY_ENV[selected]
+    provider, deep_model, quick_model, backend_url = PROVIDER_CONFIG_BY_ENV[selected]
     config["llm_provider"] = provider
     config["deep_think_llm"] = deep_model
     config["quick_think_llm"] = quick_model
+    config["backend_url"] = backend_url
     return config
 
 

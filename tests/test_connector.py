@@ -196,15 +196,18 @@ class TestCredentialBoundary:
         with _isolated_provider_environment("OPENAI_API_KEY"):
             assert "OPENAI_API_KEY" in __import__("os").environ
             assert "ANTHROPIC_API_KEY" not in __import__("os").environ
+            assert __import__("os").environ["PYTHON_DOTENV_DISABLED"] == "1"
 
         assert "OPENAI_API_KEY" in __import__("os").environ
         assert "ANTHROPIC_API_KEY" in __import__("os").environ
+        assert "PYTHON_DOTENV_DISABLED" not in __import__("os").environ
 
     def test_restores_provider_keys_after_exception(self, monkeypatch):
         from alpharena_tradingagents.cli import _isolated_provider_environment
 
         monkeypatch.setenv("OPENAI_API_KEY", "selected-value")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-value")
+        monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "legacy-setting")
         with pytest.raises(RuntimeError):
             with _isolated_provider_environment("OPENAI_API_KEY"):
                 assert "ANTHROPIC_API_KEY" not in __import__("os").environ
@@ -212,25 +215,45 @@ class TestCredentialBoundary:
 
         assert "OPENAI_API_KEY" in __import__("os").environ
         assert "ANTHROPIC_API_KEY" in __import__("os").environ
+        assert __import__("os").environ["PYTHON_DOTENV_DISABLED"] == "legacy-setting"
 
-    @pytest.mark.parametrize("variable,provider,deep,quick", [
-        ("OPENAI_API_KEY", "openai", "gpt-5.6", "gpt-5.6-luna"),
-        ("GOOGLE_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
-        ("GEMINI_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
-        ("ANTHROPIC_API_KEY", "anthropic", "claude-sonnet-5", "claude-haiku-4-5"),
+    def test_dotenv_cannot_repopulate_non_nominated_key(self, tmp_path, monkeypatch):
+        from dotenv import load_dotenv
+        from alpharena_tradingagents.cli import _isolated_provider_environment
+
+        dotenv_file = tmp_path / ".env"
+        dotenv_file.write_text("ANTHROPIC_API_KEY=decoy-value\n")
+        monkeypatch.setenv("OPENAI_API_KEY", "selected-value")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        with _isolated_provider_environment("OPENAI_API_KEY"):
+            assert load_dotenv(dotenv_path=dotenv_file) is False
+            assert "OPENAI_API_KEY" in __import__("os").environ
+            assert "ANTHROPIC_API_KEY" not in __import__("os").environ
+
+    @pytest.mark.parametrize("variable,provider,deep,quick,backend", [
+        ("OPENAI_API_KEY", "openai", "gpt-5.6", "gpt-5.6-luna", "https://api.openai.com/v1"),
+        ("GOOGLE_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash", None),
+        ("GEMINI_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash", None),
+        (
+            "ANTHROPIC_API_KEY", "anthropic", "claude-sonnet-5", "claude-haiku-4-5",
+            "https://api.anthropic.com/",
+        ),
     ])
-    def test_nominated_key_binds_tradingagents_provider(self, variable, provider, deep, quick):
+    def test_nominated_key_binds_tradingagents_provider(self, variable, provider, deep, quick, backend):
         from alpharena_tradingagents.cli import _bind_tradingagents_provider
 
         config = {
             "llm_provider": "wrong-provider",
             "deep_think_llm": "wrong-deep",
             "quick_think_llm": "wrong-quick",
+            "backend_url": "https://attacker.invalid/v1",
         }
         bound = _bind_tradingagents_provider(config, variable)
         assert bound["llm_provider"] == provider
         assert bound["deep_think_llm"] == deep
         assert bound["quick_think_llm"] == quick
+        assert bound["backend_url"] == backend
 
     def test_gemini_alias_is_scoped_and_restored(self, monkeypatch):
         from alpharena_tradingagents.cli import _isolated_provider_environment

@@ -26,10 +26,12 @@ TRUSTED_BASE_URL = "https://alpharena.io"
 # credential-to-provider binding deterministic rather than guessing models for
 # every OpenAI-compatible backend.
 PROVIDER_CONFIG_BY_ENV = {
-    "OPENAI_API_KEY": ("openai", "gpt-5.6", "gpt-5.6-luna"),
-    "ANTHROPIC_API_KEY": ("anthropic", "claude-sonnet-5", "claude-haiku-4-5"),
-    "GOOGLE_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
-    "GEMINI_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
+    "OPENAI_API_KEY": ("openai", "gpt-5.6", "gpt-5.6-luna", "https://api.openai.com/v1"),
+    "ANTHROPIC_API_KEY": (
+        "anthropic", "claude-sonnet-5", "claude-haiku-4-5", "https://api.anthropic.com/"
+    ),
+    "GOOGLE_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash", None),
+    "GEMINI_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash", None),
 }
 PROVIDER_ENV_VARS = frozenset(PROVIDER_CONFIG_BY_ENV)
 
