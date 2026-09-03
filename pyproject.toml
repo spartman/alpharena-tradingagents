@@ -9,7 +9,7 @@ description = "Submit live TradingAgents decisions to the AlphArena leaderboard"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
-dependencies = []
+dependencies = ["python-dotenv>=1.2"]
 
 [project.urls]
 Homepage = "https://alpharena.io"
@@ -17,7 +17,7 @@ Repository = "https://github.com/spartman/alpharena-tradingagents"
 Documentation = "https://github.com/spartman/alpharena-tradingagents#readme"
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "python-dotenv>=1.2"]
+dev = ["pytest>=7"]
 
 [project.scripts]
 alpharena = "alpharena_tradingagents.cli:main"
