@@ -47,7 +47,8 @@ class Config:
     #: variable name, never the value. Empty by default and deliberately so:
     #: running TradingAgents spends somebody's LLM budget, and it must be a
     #: choice, not whatever happened to be exported in the shell. The connector
-    #: never reads this variable's contents; TradingAgents does.
+    #: temporarily isolates the variable in-process without logging, storing,
+    #: or transmitting its value; TradingAgents consumes it.
     llm_provider_env: str = ""
 
     def allows(self, ticker: str) -> bool:
@@ -159,8 +160,9 @@ def load_config(path: Optional[str] = None) -> Config:
         elif _looks_like_credential(key):
             raise ConfigError(
                 f"Remove {key!r} from alpharena.yaml.\n\n"
-                "This connector never reads, stores or transmits LLM provider "
-                "credentials. TradingAgents authenticates to your model provider "
+                "This connector never logs, stores or transmits LLM provider "
+                "credentials. It isolates the nominated value in-process while "
+                "TradingAgents authenticates to your model provider "
                 "itself — configure that key in TradingAgents' own config or "
                 "environment, using YOUR account.\n\n"
                 "Nothing in this file is sent anywhere except AlphArena."

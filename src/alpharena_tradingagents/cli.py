@@ -125,7 +125,8 @@ def _cmd_submit(args: argparse.Namespace) -> int:
             "Set your own key, then name the variable in alpharena.yaml:\n\n"
             "  export GEMINI_API_KEY=your-own-key\n"
             "  llm_provider_env: GEMINI_API_KEY\n\n"
-            "The connector never reads that variable's value — TradingAgents does.",
+            "The connector isolates that variable in-process and never logs, stores, "
+            "or transmits its value; TradingAgents uses it for the nominated provider.",
             file=sys.stderr,
         )
         return 4

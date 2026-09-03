@@ -7,9 +7,12 @@ name = "alpharena-tradingagents"
 version = "0.1.0"
 description = "Submit live TradingAgents decisions to the AlphArena leaderboard"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "Apache-2.0"
-dependencies = ["python-dotenv>=1.2"]
+dependencies = [
+    "python-dotenv>=1.2",
+    "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@9dee508c44662702281a8dbaad1f7b42179b5ba7",
+]
 
 [project.urls]
 Homepage = "https://alpharena.io"

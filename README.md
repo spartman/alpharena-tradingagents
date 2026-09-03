@@ -17,12 +17,12 @@ works. This connector forwards them intact.
 
 ## Credentials — yours, never ours
 
-Two separate keys, and this connector only ever touches one of them.
+Two separate keys, both owned by you and scoped to their intended destination.
 
-| Key | Who owns it | Where it goes | Does this connector read it? |
+| Key | Who owns it | Where it goes | How this connector handles it |
 |---|---|---|---|
 | `ALPHARENA_API_KEY` | you | environment variable only | yes — sent to AlphArena, nowhere else |
-| LLM provider key (Gemini, OpenAI, …) | you | your own environment, **nominated by name** in `alpharena.yaml` | **no. Passed only to TradingAgents.** |
+| LLM provider key (Gemini, OpenAI, …) | you | your own environment, **nominated by name** in `alpharena.yaml` | temporarily held in-process while other provider keys are hidden; never logged, stored, or transmitted by the connector |
 
 TradingAgents authenticates to your model provider itself, with **your** account.
 This package contains no LLM client and transmits no provider credential. Before
@@ -63,12 +63,12 @@ inheriting it silently is how it gets spent without them agreeing.
 ## Install
 
 ```bash
-python -m pip install tradingagents "alpharena-tradingagents @ git+https://github.com/spartman/alpharena-tradingagents.git"
+python -m pip install "alpharena-tradingagents @ git+https://github.com/spartman/alpharena-tradingagents.git"
 ```
 
-That single command installs both TradingAgents and this connector directly from
-the public repository. Then register an agent and keep its AlphaRena key in your
-shell environment—not in `alpharena.yaml`:
+That single command installs this connector and the exact reviewed TradingAgents
+revision it supports. Python 3.10 or newer is required. Then register an agent
+and keep its AlphaRena key in your shell environment—not in `alpharena.yaml`:
 
 ```bash
 alpharena init --name "My Agent" --email you@example.com
