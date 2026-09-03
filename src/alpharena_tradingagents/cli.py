@@ -13,11 +13,12 @@ import argparse
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from datetime import date, timezone, datetime
 from pathlib import Path
 
 from .client import AlpharenaClient, DEFAULT_BASE_URL, ENV_KEY, register_agent
-from .config import DEFAULT_PATH, PROVIDER_ENV_VARS, load_config
+from .config import DEFAULT_PATH, PROVIDER_CONFIG_BY_ENV, PROVIDER_ENV_VARS, load_config
 from .errors import AlpharenaError
 from .submit import submit_run
 
@@ -64,11 +65,34 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _isolate_provider_environment(selected: str) -> None:
-    """Expose only the explicitly nominated provider credential downstream."""
-    for variable in PROVIDER_ENV_VARS:
-        if variable != selected and variable in os.environ:
-            del os.environ[variable]
+@contextmanager
+def _isolated_provider_environment(selected: str):
+    """Temporarily expose only the nominated provider credential downstream."""
+    previous = {variable: os.environ[variable] for variable in PROVIDER_ENV_VARS if variable in os.environ}
+    try:
+        for variable in PROVIDER_ENV_VARS:
+            if variable != selected and variable in os.environ:
+                del os.environ[variable]
+        # TradingAgents' Google adapter uses GOOGLE_API_KEY. Accept the common
+        # GEMINI_API_KEY alias while exposing the same nominated credential only
+        # under the canonical name for the duration of the run.
+        if selected == "GEMINI_API_KEY":
+            os.environ["GOOGLE_API_KEY"] = os.environ[selected]
+        yield
+    finally:
+        for variable in PROVIDER_ENV_VARS:
+            if variable in os.environ:
+                del os.environ[variable]
+        os.environ.update(previous)
+
+
+def _bind_tradingagents_provider(config: dict, selected: str) -> dict:
+    """Bind TradingAgents routing to the provider owning the nominated key."""
+    provider, deep_model, quick_model = PROVIDER_CONFIG_BY_ENV[selected]
+    config["llm_provider"] = provider
+    config["deep_think_llm"] = deep_model
+    config["quick_think_llm"] = quick_model
+    return config
 
 
 def _cmd_submit(args: argparse.Namespace) -> int:
@@ -105,27 +129,27 @@ def _cmd_submit(args: argparse.Namespace) -> int:
         )
         return 4
 
-    # TradingAgents reads provider credentials during import and execution.
-    # Remove every other known provider variable first so an ambient credential
-    # cannot be selected or spent by its provider routing.
-    _isolate_provider_environment(cfg.llm_provider_env)
-
     run_date = date.today().isoformat()
 
-    try:
-        from tradingagents.default_config import DEFAULT_CONFIG
-        from tradingagents.graph.trading_graph import TradingAgentsGraph
-    except ImportError:
-        print(
-            "TradingAgents is not installed. Install it first:\n"
-            "  pip install tradingagents\n"
-            "See https://github.com/TauricResearch/TradingAgents",
-            file=sys.stderr,
-        )
-        return 3
+    # TradingAgents reads provider credentials during import and execution.
+    # Remove every other known provider variable for that entire scope, bind its
+    # provider routing to the nominated variable, then restore the environment.
+    with _isolated_provider_environment(cfg.llm_provider_env):
+        try:
+            from tradingagents.default_config import DEFAULT_CONFIG
+            from tradingagents.graph.trading_graph import TradingAgentsGraph
+        except ImportError:
+            print(
+                "TradingAgents is not installed. Install it first:\n"
+                "  pip install tradingagents\n"
+                "See https://github.com/TauricResearch/TradingAgents",
+                file=sys.stderr,
+            )
+            return 3
 
-    graph = TradingAgentsGraph(config=DEFAULT_CONFIG.copy())
-    state, decision = graph.propagate(args.ticker, run_date)
+        ta_config = _bind_tradingagents_provider(DEFAULT_CONFIG.copy(), cfg.llm_provider_env)
+        graph = TradingAgentsGraph(config=ta_config)
+        state, decision = graph.propagate(args.ticker, run_date)
 
     result = submit_run(
         ticker=args.ticker,

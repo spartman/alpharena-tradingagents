@@ -21,31 +21,17 @@ from .errors import ConfigError
 DEFAULT_PATH = "alpharena.yaml"
 TRUSTED_BASE_URL = "https://alpharena.io"
 
-# TradingAgents provider variables supported by its current provider adapters.
-# Exactly one must be nominated. Before importing TradingAgents, the CLI removes
-# the other known provider variables from its process environment.
-PROVIDER_ENV_VARS = frozenset({
-    "ANTHROPIC_API_KEY",
-    "AZURE_OPENAI_API_KEY",
-    "DASHSCOPE_API_KEY",
-    "DASHSCOPE_CN_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "GEMINI_API_KEY",
-    "GOOGLE_API_KEY",
-    "GROQ_API_KEY",
-    "MINIMAX_API_KEY",
-    "MINIMAX_CN_API_KEY",
-    "MISTRAL_API_KEY",
-    "MOONSHOT_API_KEY",
-    "NVIDIA_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENAI_COMPATIBLE_API_KEY",
-    "OPENROUTER_API_KEY",
-    "PROVIDER_API_KEY",
-    "XAI_API_KEY",
-    "ZHIPU_API_KEY",
-    "ZHIPU_CN_API_KEY",
-})
+# Supported provider variables and explicit TradingAgents routing defaults.
+# Exactly one must be nominated. Keeping this first release narrow makes the
+# credential-to-provider binding deterministic rather than guessing models for
+# every OpenAI-compatible backend.
+PROVIDER_CONFIG_BY_ENV = {
+    "OPENAI_API_KEY": ("openai", "gpt-5.6", "gpt-5.6-luna"),
+    "ANTHROPIC_API_KEY": ("anthropic", "claude-sonnet-5", "claude-haiku-4-5"),
+    "GOOGLE_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
+    "GEMINI_API_KEY": ("google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
+}
+PROVIDER_ENV_VARS = frozenset(PROVIDER_CONFIG_BY_ENV)
 
 
 @dataclass

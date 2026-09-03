@@ -188,15 +188,58 @@ class TestCredentialBoundary:
         with pytest.raises(ConfigError):
             load_config(str(cfg))
 
-    def test_removes_non_nominated_provider_keys_before_import(self, monkeypatch):
-        from alpharena_tradingagents.cli import _isolate_provider_environment
+    def test_restores_provider_keys_after_success(self, monkeypatch):
+        from alpharena_tradingagents.cli import _isolated_provider_environment
 
         monkeypatch.setenv("OPENAI_API_KEY", "selected-value")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-value")
-        _isolate_provider_environment("OPENAI_API_KEY")
+        with _isolated_provider_environment("OPENAI_API_KEY"):
+            assert "OPENAI_API_KEY" in __import__("os").environ
+            assert "ANTHROPIC_API_KEY" not in __import__("os").environ
 
         assert "OPENAI_API_KEY" in __import__("os").environ
-        assert "ANTHROPIC_API_KEY" not in __import__("os").environ
+        assert "ANTHROPIC_API_KEY" in __import__("os").environ
+
+    def test_restores_provider_keys_after_exception(self, monkeypatch):
+        from alpharena_tradingagents.cli import _isolated_provider_environment
+
+        monkeypatch.setenv("OPENAI_API_KEY", "selected-value")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-value")
+        with pytest.raises(RuntimeError):
+            with _isolated_provider_environment("OPENAI_API_KEY"):
+                assert "ANTHROPIC_API_KEY" not in __import__("os").environ
+                raise RuntimeError("test failure")
+
+        assert "OPENAI_API_KEY" in __import__("os").environ
+        assert "ANTHROPIC_API_KEY" in __import__("os").environ
+
+    @pytest.mark.parametrize("variable,provider,deep,quick", [
+        ("OPENAI_API_KEY", "openai", "gpt-5.6", "gpt-5.6-luna"),
+        ("GOOGLE_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
+        ("GEMINI_API_KEY", "google", "gemini-3.1-pro-preview", "gemini-3.5-flash"),
+        ("ANTHROPIC_API_KEY", "anthropic", "claude-sonnet-5", "claude-haiku-4-5"),
+    ])
+    def test_nominated_key_binds_tradingagents_provider(self, variable, provider, deep, quick):
+        from alpharena_tradingagents.cli import _bind_tradingagents_provider
+
+        config = {
+            "llm_provider": "wrong-provider",
+            "deep_think_llm": "wrong-deep",
+            "quick_think_llm": "wrong-quick",
+        }
+        bound = _bind_tradingagents_provider(config, variable)
+        assert bound["llm_provider"] == provider
+        assert bound["deep_think_llm"] == deep
+        assert bound["quick_think_llm"] == quick
+
+    def test_gemini_alias_is_scoped_and_restored(self, monkeypatch):
+        from alpharena_tradingagents.cli import _isolated_provider_environment
+
+        monkeypatch.setenv("GEMINI_API_KEY", "selected-value")
+        monkeypatch.setenv("GOOGLE_API_KEY", "ambient-value")
+        with _isolated_provider_environment("GEMINI_API_KEY"):
+            assert __import__("os").environ["GOOGLE_API_KEY"] == "selected-value"
+        assert __import__("os").environ["GOOGLE_API_KEY"] == "ambient-value"
 
 
 class TestTrustedApiOrigin:
@@ -215,3 +258,17 @@ class TestTrustedApiOrigin:
         cfg.write_text("base_url: https://attacker.invalid\n")
         with pytest.raises(ConfigError):
             load_config(str(cfg))
+
+    def test_authenticated_post_rejects_redirect(self):
+        import urllib.request
+        from alpharena_tradingagents.client import _RejectRedirects
+
+        original = urllib.request.Request(
+            "https://alpharena.io/api/v1/trades",
+            headers={"Authorization": "Bearer fake"},
+            method="POST",
+        )
+        redirected = _RejectRedirects().redirect_request(
+            original, None, 302, "Found", {}, "https://attacker.invalid/collect"
+        )
+        assert redirected is None

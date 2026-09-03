@@ -18,6 +18,13 @@ DEFAULT_BASE_URL = "https://alpharena.io"
 ENV_KEY = "ALPHARENA_API_KEY"
 
 
+class _RejectRedirects(urllib.request.HTTPRedirectHandler):
+    """Never forward an authenticated AlphaRena request to another origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _trusted_base_url(base_url: str) -> str:
     """Keep the bearer credential pinned to the production AlphaRena origin."""
     normalized = base_url.rstrip("/")
@@ -94,7 +101,8 @@ class AlpharenaClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            opener = urllib.request.build_opener(_RejectRedirects)
+            with opener.open(req, timeout=self.timeout) as resp:
                 return json.loads(resp.read().decode() or "{}")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")[:500]

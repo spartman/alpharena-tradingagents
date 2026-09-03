@@ -43,15 +43,20 @@ be a choice:
 
 ```yaml
 # alpharena.yaml
-llm_provider_env: GEMINI_API_KEY    # the variable NAME. Never the key itself.
+llm_provider_env: GOOGLE_API_KEY    # the variable NAME. Never the key itself.
 ```
 
 ```bash
-export GEMINI_API_KEY=your-own-key
+export GOOGLE_API_KEY=your-own-key
 ```
 
-The connector reads the variable's *name* from config and checks it is present.
-TradingAgents reads the value, with your account. On a shared
+Supported names in this release are exactly `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, and `GEMINI_API_KEY`. The selected name
+also binds TradingAgents to that provider and compatible default models.
+
+The connector maps the variable's *name* to TradingAgents' provider setting and
+temporarily hides other known provider credentials for the run. TradingAgents
+reads the nominated value with your account. On a shared
 or operator machine an ambient provider key usually belongs to someone else, and
 inheriting it silently is how it gets spent without them agreeing.
 
