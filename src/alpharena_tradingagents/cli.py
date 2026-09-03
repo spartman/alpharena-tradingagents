@@ -16,8 +16,8 @@ import sys
 from datetime import date, timezone, datetime
 from pathlib import Path
 
-from .client import AlpharenaClient, ENV_KEY, register_agent
-from .config import DEFAULT_PATH, load_config
+from .client import AlpharenaClient, DEFAULT_BASE_URL, ENV_KEY, register_agent
+from .config import DEFAULT_PATH, PROVIDER_ENV_VARS, load_config
 from .errors import AlpharenaError
 from .submit import submit_run
 
@@ -30,7 +30,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         email=args.email,
         description=args.description or f"TradingAgents-driven agent: {args.name}",
         strategy_summary=args.strategy or "Multi-agent LLM analysis via TradingAgents",
-        base_url=args.base_url,
+        base_url=DEFAULT_BASE_URL,
     )
     path = Path(args.config or DEFAULT_PATH)
     if path.exists() and not args.force:
@@ -40,7 +40,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
             f"agent_name: {args.name!r}\n"
             f"starting_capital: {args.capital}\n"
             f"size_pct: {args.size_pct}\n"
-            f"base_url: {args.base_url}\n"
+            f"base_url: {DEFAULT_BASE_URL}\n"
             "\n"
             "# Name of the environment variable holding YOUR model-provider key.\n"
             "# The variable NAME, never the key itself. Required before `submit`\n"
@@ -62,6 +62,13 @@ def _cmd_init(args: argparse.Namespace) -> int:
         "immediately but is recorded as sandbox and is not what the board ranks."
     )
     return 0
+
+
+def _isolate_provider_environment(selected: str) -> None:
+    """Expose only the explicitly nominated provider credential downstream."""
+    for variable in PROVIDER_ENV_VARS:
+        if variable != selected and variable in os.environ:
+            del os.environ[variable]
 
 
 def _cmd_submit(args: argparse.Namespace) -> int:
@@ -89,7 +96,7 @@ def _cmd_submit(args: argparse.Namespace) -> int:
         )
         return 4
 
-    if not os.environ.get(cfg.llm_provider_env, "").strip():
+    if cfg.llm_provider_env not in os.environ:
         print(
             f"{cfg.llm_provider_env} is named in alpharena.yaml but is not set in "
             "this environment.\n"
@@ -97,6 +104,11 @@ def _cmd_submit(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 4
+
+    # TradingAgents reads provider credentials during import and execution.
+    # Remove every other known provider variable first so an ambient credential
+    # cannot be selected or spent by its provider routing.
+    _isolate_provider_environment(cfg.llm_provider_env)
 
     run_date = date.today().isoformat()
 
@@ -146,7 +158,6 @@ def main(argv: list[str] | None = None) -> int:
     p_init.add_argument("--strategy", default="")
     p_init.add_argument("--capital", type=float, default=100_000)
     p_init.add_argument("--size-pct", dest="size_pct", type=float, default=5.0)
-    p_init.add_argument("--base-url", dest="base_url", default="https://alpharena.io")
     p_init.add_argument("--force", action="store_true")
     p_init.set_defaults(func=_cmd_init)
 

@@ -18,6 +18,17 @@ DEFAULT_BASE_URL = "https://alpharena.io"
 ENV_KEY = "ALPHARENA_API_KEY"
 
 
+def _trusted_base_url(base_url: str) -> str:
+    """Keep the bearer credential pinned to the production AlphaRena origin."""
+    normalized = base_url.rstrip("/")
+    if normalized != DEFAULT_BASE_URL:
+        raise ConfigError(
+            f"AlphaRena API origin must be {DEFAULT_BASE_URL}; custom API origins "
+            "are refused so {ENV_KEY} cannot be redirected."
+        )
+    return normalized
+
+
 def register_agent(
     *,
     name: str,
@@ -34,6 +45,7 @@ def register_agent(
     is deliberate. Sandbox keys submit immediately but are marked as sandbox
     server-side, and the connector will not use them for leaderboard trades.
     """
+    base_url = _trusted_base_url(base_url)
     payload = {
         "name": name,
         "email": email,
@@ -42,7 +54,7 @@ def register_agent(
         "account_type": "agent",
     }
     req = urllib.request.Request(
-        f"{base_url.rstrip('/')}/api/v1/agents/register",
+        f"{base_url}/api/v1/agents/register",
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json", "User-Agent": "alpharena-tradingagents"},
         method="POST",
@@ -60,7 +72,7 @@ def register_agent(
 
 class AlpharenaClient:
     def __init__(self, base_url: str = DEFAULT_BASE_URL, api_key: Optional[str] = None, timeout: float = 30.0):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = _trusted_base_url(base_url)
         self.timeout = timeout
         key = api_key or os.environ.get(ENV_KEY, "")
         if not key.strip():

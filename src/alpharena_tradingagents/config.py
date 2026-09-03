@@ -19,6 +19,33 @@ from typing import List, Optional
 from .errors import ConfigError
 
 DEFAULT_PATH = "alpharena.yaml"
+TRUSTED_BASE_URL = "https://alpharena.io"
+
+# TradingAgents provider variables supported by its current provider adapters.
+# Exactly one must be nominated. Before importing TradingAgents, the CLI removes
+# the other known provider variables from its process environment.
+PROVIDER_ENV_VARS = frozenset({
+    "ANTHROPIC_API_KEY",
+    "AZURE_OPENAI_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "DASHSCOPE_CN_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GROQ_API_KEY",
+    "MINIMAX_API_KEY",
+    "MINIMAX_CN_API_KEY",
+    "MISTRAL_API_KEY",
+    "MOONSHOT_API_KEY",
+    "NVIDIA_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENAI_COMPATIBLE_API_KEY",
+    "OPENROUTER_API_KEY",
+    "PROVIDER_API_KEY",
+    "XAI_API_KEY",
+    "ZHIPU_API_KEY",
+    "ZHIPU_CN_API_KEY",
+})
 
 
 @dataclass
@@ -26,7 +53,7 @@ class Config:
     agent_name: str = ""
     starting_capital: float = 100_000.0
     size_pct: float = 5.0
-    base_url: str = "https://alpharena.io"
+    base_url: str = TRUSTED_BASE_URL
     tickers: List[str] = field(default_factory=list)
     #: Name of the environment variable holding YOUR model-provider key — the
     #: variable name, never the value. Empty by default and deliberately so:
@@ -119,9 +146,20 @@ def load_config(path: Optional[str] = None) -> Config:
                     "(for example GEMINI_API_KEY), not the key itself. Never put a "
                     "provider key in this file."
                 )
+            if value and value not in PROVIDER_ENV_VARS:
+                supported = ", ".join(sorted(PROVIDER_ENV_VARS))
+                raise ConfigError(
+                    "llm_provider_env must name a supported TradingAgents provider "
+                    f"variable. Supported names: {supported}"
+                )
             cfg.llm_provider_env = value
         elif key == "base_url":
-            cfg.base_url = value.rstrip("/")
+            if value.rstrip("/") != TRUSTED_BASE_URL:
+                raise ConfigError(
+                    f"base_url must be {TRUSTED_BASE_URL}. Custom API origins are "
+                    "refused so ALPHARENA_API_KEY cannot be redirected."
+                )
+            cfg.base_url = TRUSTED_BASE_URL
         elif key == "tickers":
             if value:  # inline form: tickers: [NVDA, AAPL]
                 cfg.tickers = [t.strip().upper() for t in value.strip("[]").split(",") if t.strip()]

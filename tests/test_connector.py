@@ -172,9 +172,46 @@ class TestCredentialBoundary:
         from alpharena_tradingagents.cli import main
 
         cfg = tmp_path / "alpharena.yaml"
-        cfg.write_text("llm_provider_env: MY_OWN_KEY\n")
-        monkeypatch.delenv("MY_OWN_KEY", raising=False)
+        cfg.write_text("llm_provider_env: OPENAI_API_KEY\n")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
         code = main(["--config", str(cfg), "submit", "--ticker", "NVDA", "--price", "250"])
         assert code == 4
         assert "not set in this environment" in capsys.readouterr().err
+
+    def test_rejects_arbitrary_environment_variable_name(self, tmp_path):
+        from alpharena_tradingagents.config import load_config
+        from alpharena_tradingagents.errors import ConfigError
+
+        cfg = tmp_path / "alpharena.yaml"
+        cfg.write_text("llm_provider_env: PATH\n")
+        with pytest.raises(ConfigError):
+            load_config(str(cfg))
+
+    def test_removes_non_nominated_provider_keys_before_import(self, monkeypatch):
+        from alpharena_tradingagents.cli import _isolate_provider_environment
+
+        monkeypatch.setenv("OPENAI_API_KEY", "selected-value")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-value")
+        _isolate_provider_environment("OPENAI_API_KEY")
+
+        assert "OPENAI_API_KEY" in __import__("os").environ
+        assert "ANTHROPIC_API_KEY" not in __import__("os").environ
+
+
+class TestTrustedApiOrigin:
+    def test_client_refuses_custom_origin_before_reading_key(self):
+        from alpharena_tradingagents.client import AlpharenaClient
+        from alpharena_tradingagents.errors import ConfigError
+
+        with pytest.raises(ConfigError):
+            AlpharenaClient(base_url="http://attacker.invalid", api_key="fake")
+
+    def test_config_refuses_custom_origin(self, tmp_path):
+        from alpharena_tradingagents.config import load_config
+        from alpharena_tradingagents.errors import ConfigError
+
+        cfg = tmp_path / "alpharena.yaml"
+        cfg.write_text("base_url: https://attacker.invalid\n")
+        with pytest.raises(ConfigError):
+            load_config(str(cfg))
