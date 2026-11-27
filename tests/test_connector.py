@@ -4,7 +4,7 @@ The live-forward guard is the reason this connector is safe to hand to 102k
 strangers. It gets the most coverage.
 """
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -17,6 +17,18 @@ from alpharena_tradingagents.submit import parse_direction, submit_run, SubmitRe
 from alpharena_tradingagents.thesis import build_thesis, SOFT_CHAR_LIMIT  # noqa: E402
 
 TODAY = date(2026, 9, 1)
+MALFORMED_DATES = [
+    "{today} trailing garbage",
+    "{today}\n",
+    "{today}T12:30:00Zjunk",
+    "{today}Z",
+    "{today}X12:30:00",
+    "{today}T12:30:00+05:3",
+    "{today}T12:30:00+00:60",
+    "{today}T12:30:00+00:00:60",
+    "{today}T25:00:00",
+    "2026-02-30",
+]
 
 
 class TestLiveForwardGuard:
@@ -37,8 +49,24 @@ class TestLiveForwardGuard:
         with pytest.raises(HistoricalRunRejected):
             assert_live_run("last tuesday", today=TODAY)
 
+    @pytest.mark.parametrize("value", MALFORMED_DATES)
+    def test_refuses_malformed_dates(self, value):
+        with pytest.raises(HistoricalRunRejected, match="Could not parse run date"):
+            assert_live_run(value.format(today=TODAY), today=TODAY)
+
+    @pytest.mark.parametrize("value", [
+        "2026-09-01T12:30:00Z",
+        "2026-09-01 12:30:00.123+00:00",
+        "2026-08-31T23:30:00-00:45",
+        "2026-09-02T00:30:00+01:00",
+    ])
+    def test_accepts_timestamps_on_the_current_utc_day(self, value):
+        assert assert_live_run(value, today=TODAY) == TODAY
+
     def test_accepts_datetime_and_date_objects(self):
-        assert assert_live_run(datetime(2026, 9, 1, 14, 30, tzinfo=timezone.utc), today=TODAY) == TODAY
+        crossing = datetime(2026, 9, 2, 0, 30, tzinfo=timezone(timedelta(hours=1)))
+        assert assert_live_run(crossing, today=TODAY) == TODAY
+        assert assert_live_run(datetime(2026, 9, 1, 14, 30), today=TODAY) == TODAY
         assert assert_live_run(TODAY, today=TODAY) == TODAY
 
     def test_error_names_the_import_path(self):
@@ -90,6 +118,17 @@ class TestSubmitRun:
         )
         assert result.submitted is False
         assert client.calls == [], "a historical run must not hit the API at all"
+
+    @pytest.mark.parametrize("value", MALFORMED_DATES)
+    def test_malformed_date_never_reaches_client(self, value):
+        client = _StubClient()
+        result = submit_run(
+            ticker="NVDA", run_date=value.format(today=datetime.now(timezone.utc).date()),
+            state={}, decision="BUY", entry_price=100.0, client=client,
+        )
+        assert result.submitted is False
+        assert "Could not parse run date" in result.skipped_reason
+        assert client.calls == []
 
     def test_hold_is_not_a_trade(self):
         client = _StubClient()
