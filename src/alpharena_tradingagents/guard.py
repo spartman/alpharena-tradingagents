@@ -11,12 +11,31 @@ credibility of the whole board.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from typing import Union
 
 from .errors import HistoricalRunRejected
 
 DateLike = Union[str, date, datetime]
+
+# fromisoformat validates calendar dates and times, but accepts arbitrary
+# date/time separators and can silently normalize out-of-range offset fields.
+_ISO_RUN_DATE = re.compile(
+    r"""
+    (?:[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{8}|[0-9]{4}-?W[0-9]{2}(?:-?[0-9])?)
+    (?:
+        [T ][0-9]{2}(?:(?P<tsep>:?)[0-9]{2}(?:(?P=tsep)[0-9]{2})?)?
+        (?:[.,][0-9]+)?
+        (?:
+            Z
+            | [+-](?:[01][0-9]|2[0-3])
+              (?:(?P<osep>:?)[0-5][0-9](?:(?P=osep)[0-5][0-9](?:[.,][0-9]+)?)?)?
+        )?
+    )?
+    """,
+    re.VERBOSE,
+)
 
 
 def _coerce(value: DateLike) -> date:
@@ -25,20 +44,17 @@ def _coerce(value: DateLike) -> date:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        text = value.strip()
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
         try:
-            parsed = datetime.fromisoformat(text)
-        except ValueError:
-            try:
-                parsed = datetime.strptime(text[:10], "%Y-%m-%d")
-            except ValueError as exc:
-                raise HistoricalRunRejected(
-                    f"Could not parse run date {value!r}. Refusing to submit: an "
-                    "unverifiable date cannot be confirmed as live."
-                ) from exc
-        return _coerce(parsed)
+            if not _ISO_RUN_DATE.fullmatch(value):
+                raise ValueError("expected an ISO date or timestamp")
+            # Python 3.10's fromisoformat does not accept a trailing Z.
+            text = value[:-1] + "+00:00" if value.endswith("Z") else value
+            return _coerce(datetime.fromisoformat(text))
+        except (ValueError, OverflowError) as exc:
+            raise HistoricalRunRejected(
+                f"Could not parse run date {value!r}. Refusing to submit: an "
+                "unverifiable date cannot be confirmed as live."
+            ) from exc
     raise HistoricalRunRejected(
         f"Unsupported run date type {type(value).__name__}. Refusing to submit."
     )
